@@ -3,7 +3,7 @@ import * as nocache from "nocache";
 import * as express from "express";
 import * as helmet from "helmet";
 import * as morgan from "morgan";
-import v1 from "./v1/index";
+import controllers from "./controllers";
 import * as errorHandler from "./middlewares/errorHandler";
 import { redisCache } from "./middlewares/redis-cache";
 
@@ -32,7 +32,7 @@ class App {
 
   private setRoutes(): void {
     this.express.use("/", home);
-    this.express.use("/v1", v1);
+    this.express.use("/api", controllers);
   }
 
   private catchErrors(): void {
