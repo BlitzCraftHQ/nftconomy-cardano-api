@@ -3,6 +3,8 @@ import { Request, Response } from "express";
 import { db } from "../../utilities/mongo";
 import { setCache, uniqueKey } from "../../utilities/redis";
 import { structure } from "../../helpers/stats";
+import { rarityNameToScore, rarityScoreToName } from "../../helpers";
+import { CardanoJamOnBreadAsset } from "../../../types";
 import * as dayjs from "dayjs";
 
 // Import lodash
@@ -14,11 +16,19 @@ import {
 } from "../../helpers/formatter";
 
 export default class TokenController {
-  public GetTokensBySlug = async (req: Request, res: Response) => {
+  public GetTokens = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
-      let { search, trait_type, trait_value, rarity, min_price, max_price } =
-        req.query;
+      const { name } = req.params;
+      let {
+        search,
+        rarity,
+        trait_type,
+        trait_value,
+        min_price,
+        max_price,
+        sort,
+        order,
+      } = req.query;
       let pageSize = 12;
       // console.log(req.query);
       let pageString = req.query.page;
@@ -28,140 +38,41 @@ export default class TokenController {
         page = 1;
       }
 
-      let findQuery: any = { $and: [{ slug }] };
+      let findQuery: any = { $and: [{ "collection.name": name }] };
 
-      // console.log(req.query);
-
-      let aggregateFilter = { $and: [] };
-      if (min_price || max_price) {
-        if (min_price) {
-          aggregateFilter.$and.push({
-            ending_price: {
-              $gte: Number(min_price),
-            },
-          });
-        }
-        if (max_price) {
-          aggregateFilter.$and.push({
-            ending_price: {
-              $lte: Number(max_price),
-            },
-          });
-        }
-
-        let sales = await db
-          .collection("rarible_events")
-          .aggregate([
-            {
-              $match: {
-                slug: slug,
-                event_type: "created",
-                ending_price: {
-                  $nin: [null],
-                },
-                created_date: {
-                  $nin: [null],
-                },
-              },
-            },
-            {
-              $group: {
-                _id: {
-                  token_id: "$token_id",
-                },
-                max_created_date: {
-                  $max: "$$ROOT.created_date",
-                },
-                items: {
-                  $push: "$$CURRENT",
-                },
-              },
-            },
-            {
-              $project: {
-                _id: 1,
-                recent_created_date: "$max_created_date",
-                recent_ending_price: {
-                  $map: {
-                    input: {
-                      $filter: {
-                        input: "$items",
-                        as: "i",
-                        cond: {
-                          $eq: ["$$i.created_date", "$max_created_date"],
-                        },
-                      },
-                    },
-                    as: "maxOccur",
-                    in: "$$maxOccur",
-                  },
-                },
-              },
-            },
-            {
-              $unwind: {
-                path: "$recent_ending_price",
-              },
-            },
-            {
-              $replaceRoot: {
-                newRoot: "$recent_ending_price",
-              },
-            },
-            {
-              $project: {
-                token_id: 1,
-                slug: 1,
-                created_date: 1,
-                ending_price: {
-                  $divide: [
-                    {
-                      $toDouble: "$ending_price",
-                    },
-                    1000000000000000000,
-                  ],
-                },
-              },
-            },
-            {
-              $match: aggregateFilter,
-            },
-            {
-              $group: {
-                _id: "null",
-                tokens: {
-                  $addToSet: "$token_id",
-                },
-              },
-            },
-          ])
-          .toArray();
-        // console.log(sales);
-        // console.dir(aggregateFilter, { depth: null });
-
-        // console.log(sales);
-
-        let tokensArray = sales[0]?.tokens;
-
-        // console.log(sales[0]?.tokens);
-        if (tokensArray.length !== 0) {
-          findQuery["$and"].push({
-            token_id: { $in: tokensArray },
-          });
-        }
+      if (search) {
+        findQuery["$and"].push({
+          displayName: { $regex: String(search), $options: "i" },
+        });
       }
 
-      // append trait_type to findquery
       if (trait_type && trait_value) {
         let trait_types = String(trait_type).split(",");
         let trait_values = String(trait_value).split(",");
         for (let i = 0; i < String(trait_type).split(",").length; i++) {
           findQuery["$and"].push({
-            traits: {
+            properties: {
               $elemMatch: {
-                trait_type: trait_types[i],
+                name: trait_types[i],
                 value: trait_values[i],
               },
+            },
+          });
+        }
+      }
+
+      if (min_price || max_price) {
+        if (min_price) {
+          findQuery.$and.push({
+            "sellOrder.price": {
+              $gte: Number(min_price),
+            },
+          });
+        }
+        if (max_price) {
+          findQuery.$and.push({
+            "sellOrder.price": {
+              $lte: Number(max_price),
             },
           });
         }
@@ -170,172 +81,63 @@ export default class TokenController {
       // append rarity_distrubution to findquery
       if (rarity) {
         findQuery["$and"].push({
-          rarity,
+          "rarity.score": {
+            $gte: rarityNameToScore(rarity),
+          },
         });
       }
 
-      if (search) {
-        findQuery["$and"].push({
-          token_id: { $regex: String(search), $options: "i" },
-        });
-      }
-
-      // console.dir(findQuery, { depth: null });
-
-      const tokens = await db
-        .collection("rarible_events")
+      let data: any = await db
+        .collection("assets")
         .aggregate([
           {
-            $match: {
-              slug: slug,
-              event_type: "successful",
-            },
-          },
-          {
-            $group: {
-              _id: {
-                token_id: "$token_id",
-              },
-              max_created_date: {
-                $max: "$$ROOT.created_date",
-              },
-              items: {
-                $push: "$$CURRENT",
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 1,
-              recent_created_date: "$max_created_date",
-              recent_ending_price: {
-                $map: {
-                  input: {
-                    $filter: {
-                      input: "$items",
-                      as: "i",
-                      cond: {
-                        $eq: ["$$i.created_date", "$max_created_date"],
-                      },
-                    },
-                  },
-                  as: "maxOccur",
-                  in: "$$maxOccur",
-                },
-              },
-            },
-          },
-          {
-            $unwind: {
-              path: "$recent_ending_price",
-            },
-          },
-          {
-            $replaceRoot: {
-              newRoot: "$recent_ending_price",
-            },
-          },
-          {
-            $project: {
-              token_id: 1,
-              slug: 1,
-              created_date: 1,
-              ending_price: {
-                $divide: [
-                  {
-                    $toDouble: "$total_price",
-                  },
-                  1000000000000000000,
-                ],
-              },
-            },
-          },
-          {
-            $lookup: {
-              from: "tokens",
-              localField: "token_id",
-              foreignField: "token_id",
-              as: "token",
-            },
-          },
-          {
-            $unwind: {
-              path: "$token",
-            },
-          },
-          {
-            $match: {
-              "token.slug": slug,
-            },
-          },
-          {
-            $replaceRoot: {
-              newRoot: {
-                $mergeObjects: [
-                  "$token",
-                  {
-                    ending_price: "$ending_price",
-                  },
-                ],
-              },
-            },
-          },
-          { $match: findQuery },
-          {
-            $match: {
-              $and: [
-                {
-                  image_url: {
-                    $exists: true,
-                  },
-                },
-                {
-                  image_url: {
-                    $nin: ["", null],
-                  },
-                },
-              ],
-            },
+            $match: findQuery,
           },
           {
             $facet: {
-              tokens: [{ $skip: (page - 1) * pageSize }, { $limit: pageSize }],
-              count: [{ $group: { _id: null, count: { $sum: 1 } } }],
+              data: [
+                {
+                  $sort: {
+                    [sort || ("displayName" as any)]: order === "asc" ? 1 : -1,
+                  },
+                },
+                {
+                  $skip: (page - 1) * pageSize,
+                },
+                {
+                  $limit: pageSize,
+                },
+              ],
+              totalCount: [
+                {
+                  $count: "count",
+                },
+              ],
             },
           },
         ])
         .toArray();
 
-      let data = tokens[0].tokens;
-      // console.log(tokens[0].count);
-      let totalCount = tokens[0]?.count[0]?.count;
-      // console.log(tokens[0].count[0].count);
-      let paginatedData = {
-        pageSize: pageSize,
-        currentPage: page,
-        totalPages: Math.ceil(totalCount / pageSize),
-      };
-
-      if (data.length === 0) {
-        setCache(
-          uniqueKey(req),
-          JSON.stringify({
-            success: true,
-            data: {
-              paginatedData,
-              data,
-            },
-          }),
-          1440
-        );
-      }
+      // if (data.length === 0) {
+      //   setCache(
+      //     uniqueKey(req),
+      //     JSON.stringify({
+      //       success: true,
+      //       data: {
+      //         paginatedData,
+      //         data,
+      //       },
+      //     }),
+      //     1440
+      //   );
+      // }
 
       res.status(200).send({
         success: true,
-        data: {
-          paginatedData,
-          data,
-        },
+        pageSize: pageSize,
+        currentPage: page,
+        totalCount: data[0].totalCount[0].count,
+        data: data[0].data,
       });
     } catch (error) {
       console.log(error.toString());

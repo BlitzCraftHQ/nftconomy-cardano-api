@@ -1,60 +1,145 @@
 import { ObjectId } from "mongodb";
 
-export type Collection = {
+export type CardanoJamOnBreadPolicy = {
   _id?: ObjectId;
-  slug: string;
-  chain: string;
-  categories?: string[];
-  marketplaces: string[];
-  address: string;
-  asset_contract_type: string;
-  nft_version?: string;
-  opensea_version?: string;
-  schema_name: string;
-  symbol: string;
-  total_supply: number;
-  banner_image_url: string | null;
-  chat_url: string | null;
-  created_date: Date;
-  description: string | null;
-  discord_url: string | null;
-  external_url: string | null;
-  image_url: string | null;
-  large_image_url: string | null;
+  nftsInCirculation: number;
+  floorPrice: number;
+  volume: number;
+  owners: number;
   name: string;
-  payout_address: string | null;
-  telegram_url: string | null;
-  twitter_username: string | null;
-  instagram_username: string | null;
-  wiki_url: string | null;
-  is_nsfw: Boolean;
-  short_description: string | null;
-  editors?: string[];
-  tokens?: Token[] | null;
+  displayName: string;
+  imageFormat: string;
+  exampleNfts: never[];
+  featuredImages: string[];
 };
 
-export type Token = {
-  id: string;
-  address?: string;
-  escrow_address?: string;
-  amount?: string;
-  block_number_minted?: string;
-  metadata_address?: string;
-  attrib_count?: number;
-  name: string;
-  for_sale?: number | boolean;
-  description?: string;
-  image_url: string | null;
-  large_image_url?: string | null;
-  featured_image_url?: string | null;
-  perma_url?: string;
-  metadata_url?: string | null;
-  rarity_percentage?: number;
-  tokenomic_score?: number;
-  traits: Trait[] | null;
+export type CardanoJamOnBreadAsset = {
+  _id?: ObjectId;
+  policyId: string;
+  assetNameHex: string;
+  displayName: string;
+  image: string;
+  imageFormat: string;
+  properties: {
+    name: string;
+    value: string;
+    commonness: string;
+  }[];
+  fullMetadata: any;
+  assetFingerprint: string;
+  collection: {
+    name: string;
+    displayName: string;
+    description: string;
+    nftsInCirculation: number;
+    floorPrice: number;
+    volume: number;
+    imageFormat: string;
+    category: string;
+    royaltiesAddress: string;
+    royaltiesRate: string;
+    articleLink: any;
+    introVideoLink: any;
+  };
+  sellOrder: {
+    listedByAddress: string;
+    listedByStakeKey: string;
+    price: number;
+    listedOn: string;
+    source: string;
+    royalties: any;
+    scriptPaymentCredentials: any;
+    payouts: {
+      address: string;
+      amount: number;
+    }[];
+  };
+  owner: any;
+  rarity: {
+    percentage: number;
+    score: number;
+    order: number;
+  };
+  likes: number;
+  files: any;
 };
 
-export type Trait = {
-  trait_type: string;
-  value: string;
+export type CardanoJamOnBreadDelistAction = {
+  _id?: ObjectId;
+  action: "delist";
+  timestamp: string;
+  price: number;
+  fromUser: {
+    address: string;
+    stakeKey: string;
+    username: string;
+    usernameType: "adahandle";
+  };
+  fromAddress: string;
+  fromStakeKey: string;
+  toUser: any;
+  toAddress: any;
+  toStakeKey: any;
+  collection: "spacebudz";
+  policyId: string;
+  assetNameHex: string;
+  image: string;
+  displayName: string;
+  txHash: string;
+  source: "sell_order";
+};
+
+export type CardanoJamOnBreadSellAction = {
+  _id?: ObjectId;
+  action: "sell";
+  timestamp: string;
+  price: number;
+  fromUser: {
+    address: string;
+    stakeKey: string;
+    username: any;
+    usernameType: "adahandle";
+  };
+  fromAddress: string;
+  fromStakeKey: string;
+  toUser: {
+    address: string;
+    stakeKey: string;
+    username: any;
+    usernameType: "adahandle";
+  };
+  toAddress: string;
+  toStakeKey: string;
+  collection: "spacebudz";
+  policyId: string;
+  assetNameHex: string;
+  image: string;
+  displayName: string;
+  txHash: string;
+  source: "sell_order";
+};
+
+export type CardanoJamOnBreadListAction = {
+  _id?: ObjectId;
+  action: "list";
+  timestamp: string;
+  price: number;
+  fromUser: {
+    address: string;
+    stakeKey: string;
+    username: string;
+    usernameType: "adahandle";
+  };
+  fromAddress: string;
+  fromStakeKey: string;
+  toUser: any;
+  toAddress: any;
+  toStakeKey: any;
+  collection: "spacebudz";
+  policyId: string;
+  assetNameHex: string;
+  image: string;
+  displayName: string;
+  txHash: string;
+  source: "sell_order";
 };

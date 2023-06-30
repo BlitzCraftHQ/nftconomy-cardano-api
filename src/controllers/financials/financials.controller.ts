@@ -12,28 +12,25 @@ import { setCache, uniqueKey } from "../../utilities/redis";
 
 export default class FinancialsController {
   public GetVolume = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
 
     let subtractedTime;
     if (time)
-      subtractedTime = await getSubtractedtime(
-        time,
-        ["rarible_events"],
-        ["created_date"],
-        { slug: slug }
-      );
+      subtractedTime = await getSubtractedtime(time, ["sales"], ["timestamp"], {
+        collection: name,
+      });
 
     try {
       let volumeData = await db
-        .collection("rarible_events")
+        .collection("sales")
         .aggregate([
           {
             $match: {
-              ...structure(time, slug).matchFormat,
+              ...structure(time, name).matchFormat,
               ...(time
                 ? {
-                    created_date: {
+                    timestamp: {
                       $gte: subtractedTime.toISOString(),
                     },
                   }
@@ -42,24 +39,21 @@ export default class FinancialsController {
           },
           {
             $project: {
-              created_date: {
-                $toDate: "$created_date",
+              timestamp: {
+                $toDate: "$timestamp",
               },
               total_price: 1,
-              slug: 1,
+              name: 1,
             },
           },
           {
             $group: {
-              _id: structure(time, slug).idFormat,
+              _id: structure(time, name).idFormat,
               volume: {
                 $sum: {
                   $divide: [
                     {
-                      $convert: {
-                        input: "$total_price",
-                        to: "double",
-                      },
+                      $toDouble: "$selling_order.price",
                     },
                     1000000000000000000,
                   ],
@@ -121,7 +115,7 @@ export default class FinancialsController {
   };
 
   public GetPrice = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
 
     let subtractedTime;
@@ -130,14 +124,14 @@ export default class FinancialsController {
         time,
         ["rarible_events"],
         ["created_date"],
-        { slug: slug }
+        { name: name }
       );
 
     try {
       let pipeline = [
         {
           $match: {
-            ...structure(time, slug).matchFormat,
+            ...structure(time, name).matchFormat,
             ...(time
               ? {
                   created_date: {
@@ -153,12 +147,12 @@ export default class FinancialsController {
               $toDate: "$created_date",
             },
             total_price: 1,
-            slug: 1,
+            name: 1,
           },
         },
         {
           $group: {
-            _id: structure(time, slug).idFormat,
+            _id: structure(time, name).idFormat,
             average_total_price: {
               $avg: {
                 $divide: [
@@ -268,11 +262,11 @@ export default class FinancialsController {
   };
 
   public GetSalesAndLiquidity = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
     try {
       let totalSupply = await db.collection("collections").findOne({
-        slug,
+        name,
       });
 
       let subtractedTime;
@@ -281,7 +275,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let salesData = await db
@@ -289,7 +283,7 @@ export default class FinancialsController {
         .aggregate([
           {
             $match: {
-              ...structure(time, slug).matchFormat,
+              ...structure(time, name).matchFormat,
               ...(time
                 ? {
                     created_date: {
@@ -304,12 +298,12 @@ export default class FinancialsController {
               created_date: {
                 $toDate: "$created_date",
               },
-              slug: 1,
+              name: 1,
             },
           },
           {
             $group: {
-              _id: structure(time, slug).idFormat,
+              _id: structure(time, name).idFormat,
               sales: { $sum: 1 },
             },
           },
@@ -368,7 +362,7 @@ export default class FinancialsController {
   };
 
   public GetNoOfListings = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
     try {
       let subtractedTime;
@@ -377,13 +371,13 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let pipeline = [
         {
           $match: {
-            ...structure(time, slug, "created").matchFormat,
+            ...structure(time, name).matchFormat,
             ...(time
               ? {
                   created_date: {
@@ -398,12 +392,12 @@ export default class FinancialsController {
             created_date: {
               $toDate: "$created_date",
             },
-            slug: 1,
+            name: 1,
           },
         },
         {
           $group: {
-            _id: structure(time, slug).idFormat,
+            _id: structure(time, name).idFormat,
             listings: { $sum: 1 },
           },
         },
@@ -464,7 +458,7 @@ export default class FinancialsController {
 
   public GetFloorPrice = async (req: Request, res: Response) => {
     try {
-      let { slug } = req.params;
+      let { name } = req.params;
       let { time } = req.query;
 
       let subtractedTime;
@@ -473,7 +467,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let floorPrice = await db
@@ -483,14 +477,14 @@ export default class FinancialsController {
             $match: time
               ? {
                   event_type: "created",
-                  slug: slug,
+                  name: name,
                   created_date: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
               : {
                   event_type: "created",
-                  slug: slug,
+                  name: name,
                 },
           },
           {
@@ -499,12 +493,12 @@ export default class FinancialsController {
                 $toDate: "$created_date",
               },
               ending_price: 1,
-              slug: 1,
+              name: 1,
             },
           },
           {
             $group: {
-              _id: structure(time, slug).idFormat,
+              _id: structure(time, name).idFormat,
               floor_price: {
                 $min: {
                   $divide: [
@@ -577,7 +571,7 @@ export default class FinancialsController {
 
   public GetTransfers = async (req: Request, res: Response) => {
     try {
-      let { slug } = req.params;
+      let { name } = req.params;
       let { time } = req.query;
 
       let subtractedTime;
@@ -586,7 +580,7 @@ export default class FinancialsController {
           time,
           ["transfers"],
           ["block_timestamp"],
-          { slug: slug }
+          { name: name }
         );
 
       let transfers = await db
@@ -595,13 +589,13 @@ export default class FinancialsController {
           {
             $match: time
               ? {
-                  slug,
+                  name,
                   block_timestamp: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
               : {
-                  slug,
+                  name,
                 },
           },
           {
@@ -613,7 +607,7 @@ export default class FinancialsController {
           },
           {
             $group: {
-              _id: structure(time, slug).idFormat,
+              _id: structure(time, name).idFormat,
               transfer_count: {
                 $count: {},
               },
@@ -682,7 +676,7 @@ export default class FinancialsController {
 
   public GetMarketCap = async (req: Request, res: Response) => {
     try {
-      let { slug } = req.params;
+      let { name } = req.params;
       let { time } = req.query;
 
       let subtractedTime;
@@ -691,17 +685,17 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let matchFormat: any = {
-        slug: slug,
+        name: name,
         event_type: "successful",
       };
 
       if (time) {
         matchFormat = {
-          slug: slug,
+          name: name,
           event_type: "successful",
           created_date: {
             $gte: subtractedTime.toISOString(),
@@ -748,7 +742,7 @@ export default class FinancialsController {
           {
             $group: {
               _id: {
-                ...structure(time, slug).idFormat,
+                ...structure(time, name).idFormat,
                 token_id: {
                   $convert: {
                     input: "$token_id",
@@ -855,7 +849,7 @@ export default class FinancialsController {
   public GetTopSales = async (req: Request, res: Response) => {
     try {
       const time = req.query.time || "all";
-      const slug = req.params.slug;
+      const name = req.params.name;
 
       let pageSize = 10;
       let pageString = req.query.page;
@@ -868,7 +862,7 @@ export default class FinancialsController {
             time,
             ["rarible_events"],
             ["created_date"],
-            { slug: slug }
+            { name: name }
           );
 
         let match =
@@ -895,12 +889,12 @@ export default class FinancialsController {
         .aggregate([
           {
             $match: {
-              slug: slug,
+              name: name,
             },
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: "$name",
               collection_img_url: "$image_url",
               collection_address: "$address",
@@ -909,17 +903,17 @@ export default class FinancialsController {
           {
             $lookup: {
               from: "rarible_events",
-              localField: "slug",
-              foreignField: "slug",
+              localField: "name",
+              foreignField: "name",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "events",
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     event_type: 1,
                     token_id: 1,
                     total_price: 1,
@@ -941,7 +935,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: 1,
               collection_img_url: 1,
               collection_address: 1,
@@ -977,7 +971,7 @@ export default class FinancialsController {
             $lookup: {
               from: "tokens",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "result",
@@ -987,7 +981,7 @@ export default class FinancialsController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$name", "$$name"],
                         },
                         {
                           $eq: ["$token_id", "$$token_id"],
@@ -1021,7 +1015,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: 1,
               collection_img_url: 1,
               collection_address: 1,
@@ -1030,7 +1024,6 @@ export default class FinancialsController {
                 $divide: ["$total_price", 1000000000000000000],
               },
               created_date: 1,
-              name: 1,
               image_url: 1,
             },
           },
@@ -1038,14 +1031,14 @@ export default class FinancialsController {
             $lookup: {
               from: "rarible_events",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "owner",
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     event_type: 1,
                     created_date: {
@@ -1062,7 +1055,7 @@ export default class FinancialsController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$name", "$$name"],
                         },
                         {
                           $eq: ["$token_id", "$$token_id"],
@@ -1089,7 +1082,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: 1,
               collection_img_url: 1,
               collection_address: 1,
@@ -1106,17 +1099,17 @@ export default class FinancialsController {
           {
             $lookup: {
               from: "transfers",
-              localField: "slug",
-              foreignField: "slug",
+              localField: "name",
+              foreignField: "name",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "last_price",
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $toDouble: "$value",
@@ -1128,7 +1121,7 @@ export default class FinancialsController {
                 },
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $divide: ["$value", 1000000000000000000],
@@ -1141,7 +1134,7 @@ export default class FinancialsController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$name", "$$name"],
                         },
                         {
                           $eq: ["$token_id", "$$token_id"],
@@ -1187,7 +1180,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: 1,
               collection_img_url: 1,
               collection_address: 1,
@@ -1207,7 +1200,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               collection_name: 1,
               collection_img_url: 1,
               collection_address: 1,
@@ -1236,17 +1229,17 @@ export default class FinancialsController {
           {
             $lookup: {
               from: "transfers",
-              localField: "slug",
-              foreignField: "slug",
+              localField: "name",
+              foreignField: "name",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "transfers",
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $toDouble: "$value",
@@ -1258,7 +1251,7 @@ export default class FinancialsController {
                 },
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $divide: ["$value", 1000000000000000000],
@@ -1271,7 +1264,7 @@ export default class FinancialsController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$name", "$$name"],
                         },
                         {
                           $eq: ["$token_id", "$$token_id"],
@@ -1355,17 +1348,17 @@ export default class FinancialsController {
           {
             $lookup: {
               from: "transfers",
-              localField: "slug",
-              foreignField: "slug",
+              localField: "name",
+              foreignField: "name",
               let: {
-                slug: "$slug",
+                name: "$name",
                 token_id: "$token_id",
               },
               as: "last_deal",
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $toDouble: "$value",
@@ -1377,7 +1370,7 @@ export default class FinancialsController {
                 },
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     token_id: 1,
                     value: {
                       $divide: ["$value", 1000000000000000000],
@@ -1390,7 +1383,7 @@ export default class FinancialsController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$name", "$$name"],
                         },
                         {
                           $eq: ["$token_id", "$$token_id"],
@@ -1404,7 +1397,7 @@ export default class FinancialsController {
                 },
                 {
                   $group: {
-                    _id: ["$slug", "$token_id"],
+                    _id: ["$name", "$token_id"],
                     data: {
                       $addToSet: {
                         block_timestamp: "$block_timestamp",
@@ -1474,7 +1467,7 @@ export default class FinancialsController {
   };
 
   public GetVolumeSimilar = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
 
     let subtractedTime;
@@ -1483,20 +1476,20 @@ export default class FinancialsController {
         time,
         ["rarible_events"],
         ["created_date"],
-        { slug: slug }
+        { name: name }
       );
 
     try {
       const pipeline = [
         {
           $match: {
-            slug,
+            name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -1506,8 +1499,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -1540,12 +1533,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   volume: {
                     $sum: "$events.total_price",
                   },
@@ -1576,7 +1564,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -1595,7 +1583,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -1616,7 +1604,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -1629,12 +1617,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitor_volume: {
                     $sum: "$events.total_price",
                   },
@@ -1654,14 +1637,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -1675,14 +1658,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -1715,12 +1698,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   categories_volume: {
                     $sum: "$events.total_price",
                   },
@@ -1910,7 +1888,7 @@ export default class FinancialsController {
 
   public GetFloorPriceSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -1919,19 +1897,19 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -1941,8 +1919,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -1978,8 +1956,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug, "created", "$events.created_date")
-                    .idFormat,
+                  _id: structure(time, name).idFormat,
                   floor_price: {
                     $min: "$events.ending_price",
                   },
@@ -2010,7 +1987,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -2029,7 +2006,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -2053,7 +2030,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -2066,8 +2043,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug, "created", "$events.created_date")
-                    .idFormat,
+                  _id: structure(time, name).idFormat,
                   competitor_floor_price: {
                     $min: "$events.ending_price",
                   },
@@ -2087,14 +2063,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -2108,14 +2084,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -2151,8 +2127,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug, "created", "$events.created_date")
-                    .idFormat,
+                  _id: structure(time, name).idFormat,
                   categories_floor_price: {
                     $min: "$events.ending_price",
                   },
@@ -2362,7 +2337,7 @@ export default class FinancialsController {
 
   public GetMarketCapSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -2371,7 +2346,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let finalGroupFormat: any = {
@@ -2398,13 +2373,13 @@ export default class FinancialsController {
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -2414,8 +2389,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -2453,12 +2428,7 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
+                    ...structure(time, name).idFormat,
                     token_id: "$token_id",
                   },
                   last_traded_price: {
@@ -2515,7 +2485,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -2534,7 +2504,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -2572,12 +2542,7 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
+                    ...structure(time, name).idFormat,
                     token_id: "$token_id",
                   },
                   competitor_last_traded_price: {
@@ -2626,14 +2591,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -2647,14 +2612,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -2692,14 +2657,9 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
+                    ...structure(time, name).idFormat,
                     token_id: "$token_id",
-                    slug: "$slug",
+                    name: "$name",
                   },
                   categories_last_traded_price: {
                     $last: "$events.total_price",
@@ -2974,7 +2934,7 @@ export default class FinancialsController {
 
   public GetSalesSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -2983,18 +2943,18 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -3012,7 +2972,7 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         categories: 1,
                       },
                     },
@@ -3027,7 +2987,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$output.slug",
+                  name: "$output.name",
                   main_category: "$categories",
                   categories: "$output.categories",
                   intersect: {
@@ -3037,7 +2997,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: 1,
+                  name: 1,
                   main_category: 1,
                   hasCategory: {
                     $cond: [
@@ -3060,16 +3020,16 @@ export default class FinancialsController {
                   hasCategory: {
                     $eq: true,
                   },
-                  slug: {
-                    $ne: slug,
+                  name: {
+                    $ne: name,
                   },
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -3092,7 +3052,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3106,13 +3066,13 @@ export default class FinancialsController {
               {
                 $project: {
                   created_date: "$events.created_date",
-                  slug: "$events.slug",
+                  name: "$events.name",
                   main_category: 1,
                 },
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   sales: {
                     $sum: 1,
                   },
@@ -3138,8 +3098,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   pipeline: [
                     {
                       $match: {
@@ -3161,7 +3121,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3175,7 +3135,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: 1,
+                  name: 1,
                   created_date: {
                     $toDate: "$results.created_date",
                   },
@@ -3183,7 +3143,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   sales: {
                     $sum: 1,
                   },
@@ -3215,7 +3175,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -3234,7 +3194,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -3257,7 +3217,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3276,7 +3236,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitorSales: {
                     $sum: 1,
                   },
@@ -3407,11 +3367,11 @@ export default class FinancialsController {
 
   public GetLiquiditySimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let totalSupply = await db.collection("collections").findOne({
-        slug,
+        name,
       });
 
       let categorySupply = await db
@@ -3419,7 +3379,7 @@ export default class FinancialsController {
         .aggregate([
           {
             $match: {
-              slug: slug,
+              name: name,
             },
           },
           {
@@ -3438,7 +3398,7 @@ export default class FinancialsController {
               pipeline: [
                 {
                   $project: {
-                    slug: 1,
+                    name: 1,
                     total_supply: 1,
                     categories: 1,
                   },
@@ -3454,7 +3414,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: "$output.slug",
+              name: "$output.name",
               intersect: {
                 $setIntersection: ["$categories", "$output.categories"],
               },
@@ -3463,7 +3423,7 @@ export default class FinancialsController {
           },
           {
             $project: {
-              slug: 1,
+              name: 1,
               total_supply: 1,
               hasCategory: {
                 $cond: [
@@ -3508,18 +3468,18 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -3537,7 +3497,7 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         categories: 1,
                       },
                     },
@@ -3552,7 +3512,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$output.slug",
+                  name: "$output.name",
                   main_category: "$categories",
                   categories: "$output.categories",
                   intersect: {
@@ -3562,7 +3522,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: 1,
+                  name: 1,
                   main_category: 1,
                   hasCategory: {
                     $cond: [
@@ -3585,16 +3545,16 @@ export default class FinancialsController {
                   hasCategory: {
                     $eq: true,
                   },
-                  slug: {
-                    $ne: slug,
+                  name: {
+                    $ne: name,
                   },
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -3617,7 +3577,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3631,13 +3591,13 @@ export default class FinancialsController {
               {
                 $project: {
                   created_date: "$events.created_date",
-                  slug: "$events.slug",
+                  name: "$events.name",
                   main_category: 1,
                 },
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   sales: {
                     $sum: 1,
                   },
@@ -3663,8 +3623,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   pipeline: [
                     {
                       $match: {
@@ -3686,7 +3646,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3700,7 +3660,7 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: 1,
+                  name: 1,
                   created_date: {
                     $toDate: "$results.created_date",
                   },
@@ -3708,7 +3668,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   sales: {
                     $sum: 1,
                   },
@@ -3740,7 +3700,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -3759,7 +3719,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -3782,7 +3742,7 @@ export default class FinancialsController {
                         created_date: {
                           $toDate: "$created_date",
                         },
-                        slug: 1,
+                        name: 1,
                       },
                     },
                   ],
@@ -3801,7 +3761,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(time, slug).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitorSales: {
                     $sum: 1,
                   },
@@ -3949,7 +3909,7 @@ export default class FinancialsController {
 
   public GetAvgPriceSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -3958,7 +3918,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let finalGroupFormat: any = {
@@ -3985,13 +3945,13 @@ export default class FinancialsController {
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -4001,8 +3961,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4041,12 +4001,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   value: {
                     $avg: "$events.total_price",
                   },
@@ -4077,7 +4032,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -4096,7 +4051,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4135,12 +4090,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitor_value: {
                     $avg: "$events.total_price",
                   },
@@ -4160,14 +4110,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -4181,14 +4131,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4228,13 +4178,8 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
-                    slug: "$slug",
+                    ...structure(time, name).idFormat,
+                    name: "$name",
                   },
                   avg_value: {
                     $avg: "$events.total_price",
@@ -4442,7 +4387,7 @@ export default class FinancialsController {
 
   public GetMinPriceSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -4451,7 +4396,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let finalGroupFormat: any = {
@@ -4478,13 +4423,13 @@ export default class FinancialsController {
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -4494,8 +4439,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4534,12 +4479,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   value: {
                     $min: "$events.total_price",
                   },
@@ -4570,7 +4510,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -4589,7 +4529,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4628,12 +4568,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitor_value: {
                     $min: "$events.total_price",
                   },
@@ -4653,14 +4588,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -4674,14 +4609,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -4721,13 +4656,8 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
-                    slug: "$slug",
+                    ...structure(time, name).idFormat,
+                    name: "$name",
                   },
                   value: {
                     $min: "$events.total_price",
@@ -4935,7 +4865,7 @@ export default class FinancialsController {
 
   public GetMaxPriceSimilar = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
@@ -4944,7 +4874,7 @@ export default class FinancialsController {
           time,
           ["rarible_events"],
           ["created_date"],
-          { slug: slug }
+          { name: name }
         );
 
       let finalGroupFormat: any = {
@@ -4971,13 +4901,13 @@ export default class FinancialsController {
       const pipeline = [
         {
           $match: {
-            slug: slug,
+            name: name,
           },
         },
         {
           $project: {
             _id: 0,
-            slug: 1,
+            name: 1,
             categories: 1,
           },
         },
@@ -4987,8 +4917,8 @@ export default class FinancialsController {
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -5027,12 +4957,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   value: {
                     $max: "$events.total_price",
                   },
@@ -5063,7 +4988,7 @@ export default class FinancialsController {
                     {
                       $match: {
                         _id: {
-                          $ne: slug,
+                          $ne: name,
                         },
                       },
                     },
@@ -5082,7 +5007,7 @@ export default class FinancialsController {
                 $lookup: {
                   from: "rarible_events",
                   localField: "next_top_collection._id",
-                  foreignField: "slug",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -5121,12 +5046,7 @@ export default class FinancialsController {
               },
               {
                 $group: {
-                  _id: structure(
-                    time,
-                    slug,
-                    "successful",
-                    "$events.created_date"
-                  ).idFormat,
+                  _id: structure(time, name).idFormat,
                   competitor_value: {
                     $max: "$events.total_price",
                   },
@@ -5146,14 +5066,14 @@ export default class FinancialsController {
                   pipeline: [
                     {
                       $project: {
-                        slug: 1,
+                        name: 1,
                         _id: 0,
                       },
                     },
                     {
                       $match: {
-                        slug: {
-                          $ne: slug,
+                        name: {
+                          $ne: name,
                         },
                       },
                     },
@@ -5167,14 +5087,14 @@ export default class FinancialsController {
               },
               {
                 $project: {
-                  slug: "$similar.slug",
+                  name: "$similar.name",
                 },
               },
               {
                 $lookup: {
                   from: "rarible_events",
-                  localField: "slug",
-                  foreignField: "slug",
+                  localField: "name",
+                  foreignField: "name",
                   as: "events",
                   pipeline: [
                     {
@@ -5214,13 +5134,8 @@ export default class FinancialsController {
               {
                 $group: {
                   _id: {
-                    ...structure(
-                      time,
-                      slug,
-                      "successful",
-                      "$events.created_date"
-                    ).idFormat,
-                    slug: "$slug",
+                    ...structure(time, name).idFormat,
+                    name: "$name",
                   },
                   value: {
                     $max: "$events.total_price",
@@ -5428,13 +5343,13 @@ export default class FinancialsController {
 
   public GetPlatformVolumeAndSales = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let pipeline = [
         {
           $match: {
-            ...structure(time, slug).matchFormat,
+            ...structure(time, name).matchFormat,
           },
         },
         {
@@ -5497,13 +5412,13 @@ export default class FinancialsController {
 
   public GetCurrencyVolumeAndSales = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let pipeline = [
         {
           $match: {
-            ...structure(time, slug).matchFormat,
+            ...structure(time, name).matchFormat,
           },
         },
         {

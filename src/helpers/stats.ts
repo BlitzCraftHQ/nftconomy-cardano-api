@@ -1,8 +1,7 @@
 export const structure = (
   time: any,
-  slug: string,
-  event_type: string = "successful",
-  date_key: any = "$created_date"
+  name: string,
+  date_key: any = "$timestamp"
 ): any => {
   let subtractedTime;
   let today = new Date();
@@ -75,39 +74,17 @@ export const structure = (
     subtractedTime = today.setFullYear(today.getFullYear() - 1);
   }
 
-  let matchFormat: any =
-    event_type == "successful"
-      ? {
-          event_type: event_type,
-          slug: slug,
-          total_price: {
-            $nin: [null, "0", 0],
-          },
-        }
-      : {
-          event_type: event_type,
-          slug: slug,
-        };
+  let matchFormat: any = {
+    name,
+  };
+
   if (time) {
-    matchFormat =
-      event_type == "successful"
-        ? {
-            event_type: event_type,
-            slug: slug,
-            created_date: {
-              $gte: new Date(subtractedTime).toISOString(),
-            },
-            total_price: {
-              $nin: [null, "0", 0],
-            },
-          }
-        : {
-            event_type: event_type,
-            slug: slug,
-            created_date: {
-              $gte: new Date(subtractedTime).toISOString(),
-            },
-          };
+    matchFormat = {
+      collection: name,
+      timestamp: {
+        $gte: new Date(subtractedTime).toISOString(),
+      },
+    };
   }
 
   return {

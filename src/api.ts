@@ -27,7 +27,7 @@ class App {
     this.express.use(express.urlencoded({ extended: true }));
     this.express.use(helmet());
     this.express.use(express.static("public"));
-    this.express.use(redisCache);
+    // this.express.use(redisCache);
   }
 
   private setRoutes(): void {

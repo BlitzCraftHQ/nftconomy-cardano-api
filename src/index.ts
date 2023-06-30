@@ -1,8 +1,8 @@
 import * as dotenv from "dotenv";
 import { client } from "./utilities/mongo";
 
-import { redisClient } from "./utilities/redis";
-redisClient.connect();
+// import { redisClient } from "./utilities/redis";
+// redisClient.connect();
 
 // const cron = require("node-cron");
 // import { cache } from "./utilities/preCache";
