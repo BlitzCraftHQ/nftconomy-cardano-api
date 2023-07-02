@@ -22,57 +22,54 @@ export default class FinancialsController {
       });
 
     try {
+      let pipeline = [
+        {
+          $match: {
+            ...structure(time, name).matchFormat,
+            ...(time
+              ? {
+                  timestamp: {
+                    $gte: subtractedTime.toISOString(),
+                  },
+                }
+              : {}),
+          },
+        },
+        {
+          $project: {
+            timestamp: {
+              $toDate: "$timestamp",
+            },
+            price: 1,
+            name: 1,
+          },
+        },
+        {
+          $group: {
+            _id: structure(time, name).idFormat,
+            volume: {
+              $sum: {
+                $toDouble: "$price",
+              },
+            },
+          },
+        },
+        {
+          $project: {
+            _id: getDateFormat(time),
+            volume: 1,
+          },
+        },
+        {
+          $sort: {
+            _id: 1,
+          },
+        },
+      ];
+
       let volumeData = await db
         .collection("sales")
-        .aggregate([
-          {
-            $match: {
-              ...structure(time, name).matchFormat,
-              ...(time
-                ? {
-                    timestamp: {
-                      $gte: subtractedTime.toISOString(),
-                    },
-                  }
-                : {}),
-            },
-          },
-          {
-            $project: {
-              timestamp: {
-                $toDate: "$timestamp",
-              },
-              total_price: 1,
-              name: 1,
-            },
-          },
-          {
-            $group: {
-              _id: structure(time, name).idFormat,
-              volume: {
-                $sum: {
-                  $divide: [
-                    {
-                      $toDouble: "$selling_order.price",
-                    },
-                    1000000000000000000,
-                  ],
-                },
-              },
-            },
-          },
-          {
-            $project: {
-              _id: getDateFormat(time),
-              volume: 1,
-            },
-          },
-          {
-            $sort: {
-              _id: 1,
-            },
-          },
-        ])
+        .aggregate(pipeline)
         .toArray();
 
       let data = [];
@@ -95,14 +92,14 @@ export default class FinancialsController {
         startFrom = date;
       });
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
