@@ -235,7 +235,7 @@ export default class FinancialsController {
     let { name } = req.params;
     let { time } = req.query;
     try {
-      let totalSupply = await db.collection("collections").findOne({
+      let collectionData = await db.collection("policies").findOne({
         name,
       });
 
@@ -243,20 +243,20 @@ export default class FinancialsController {
       if (time)
         subtractedTime = await getSubtractedtime(
           time,
-          ["rarible_events"],
-          ["created_date"],
-          { name: name }
+          ["sales"],
+          ["timestamp"],
+          { collection: name }
         );
 
       let salesData = await db
-        .collection("rarible_events")
+        .collection("sales")
         .aggregate([
           {
             $match: {
               ...structure(time, name).matchFormat,
               ...(time
                 ? {
-                    created_date: {
+                    timestamp: {
                       $gte: subtractedTime.toISOString(),
                     },
                   }
@@ -265,8 +265,8 @@ export default class FinancialsController {
           },
           {
             $project: {
-              created_date: {
-                $toDate: "$created_date",
+              timestamp: {
+                $toDate: "$timestamp",
               },
               name: 1,
             },
@@ -306,20 +306,21 @@ export default class FinancialsController {
       salesData.forEach((item, index) => {
         const date = dayjs(item._id);
         fixMissingDateRange(data, !time ? "1y" : time, startFrom, date, value);
-        (item.liquidity = (item.sales / totalSupply.total_supply) * 100),
+        (item.liquidity =
+          (item.sales / collectionData.nftsInCirculation) * 100),
           data.push(item);
         startFrom = date;
       });
 
       // fixMissingDateRange(data, !time ? "1y" : time, startFrom, dayjs(), value);
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
@@ -339,9 +340,9 @@ export default class FinancialsController {
       if (time)
         subtractedTime = await getSubtractedtime(
           time,
-          ["rarible_events"],
-          ["created_date"],
-          { name: name }
+          ["sales"],
+          ["timestamp"],
+          { collection: name }
         );
 
       let pipeline = [
@@ -350,7 +351,7 @@ export default class FinancialsController {
             ...structure(time, name).matchFormat,
             ...(time
               ? {
-                  created_date: {
+                  timestamp: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
@@ -359,8 +360,8 @@ export default class FinancialsController {
         },
         {
           $project: {
-            created_date: {
-              $toDate: "$created_date",
+            timestamp: {
+              $toDate: "$timestamp",
             },
             name: 1,
           },
@@ -384,10 +385,7 @@ export default class FinancialsController {
         },
       ];
 
-      let result = await db
-        .collection("rarible_events")
-        .aggregate(pipeline)
-        .toArray();
+      let result = await db.collection("sales").aggregate(pipeline).toArray();
 
       let data = [];
       var startFrom = !time
@@ -407,14 +405,14 @@ export default class FinancialsController {
         startFrom = date;
       });
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
@@ -435,34 +433,32 @@ export default class FinancialsController {
       if (time)
         subtractedTime = await getSubtractedtime(
           time,
-          ["rarible_events"],
-          ["created_date"],
-          { name: name }
+          ["listings"],
+          ["timestamp"],
+          { collection: name }
         );
 
       let floorPrice = await db
-        .collection("rarible_events")
+        .collection("listings")
         .aggregate([
           {
             $match: time
               ? {
-                  event_type: "created",
-                  name: name,
-                  created_date: {
+                  collection: name,
+                  timestamp: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
               : {
-                  event_type: "created",
-                  name: name,
+                  collection: name,
                 },
           },
           {
             $project: {
-              created_date: {
-                $toDate: "$created_date",
+              timestamp: {
+                $toDate: "$timestamp",
               },
-              ending_price: 1,
+              price: 1,
               name: 1,
             },
           },
@@ -471,15 +467,7 @@ export default class FinancialsController {
               _id: structure(time, name).idFormat,
               floor_price: {
                 $min: {
-                  $divide: [
-                    {
-                      $convert: {
-                        input: "$ending_price",
-                        to: "double",
-                      },
-                    },
-                    1000000000000000000,
-                  ],
+                  $toDouble: "$price",
                 },
               },
             },
@@ -519,15 +507,14 @@ export default class FinancialsController {
         prevFloorPrice = item.floor_price;
       });
 
-      // fixMissingDateRange(data, !time ? "1y" : time, startFrom, dayjs(), value);
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
@@ -548,30 +535,30 @@ export default class FinancialsController {
       if (time)
         subtractedTime = await getSubtractedtime(
           time,
-          ["transfers"],
-          ["block_timestamp"],
-          { name: name }
+          ["sales"],
+          ["timestamp"],
+          { collection: name }
         );
 
       let transfers = await db
-        .collection("transfers")
+        .collection("sales")
         .aggregate([
           {
             $match: time
               ? {
-                  name,
-                  block_timestamp: {
+                  collection: name,
+                  timestamp: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
               : {
-                  name,
+                  collection: name,
                 },
           },
           {
             $project: {
-              created_date: {
-                $toDate: "$block_timestamp",
+              timestamp: {
+                $toDate: "$timestamp",
               },
             },
           },
@@ -622,17 +609,14 @@ export default class FinancialsController {
         startFrom = date;
       });
 
-      // fixMissingDateRange(data, !time ? "1y" : time, startFrom, dayjs(), defaultValue);
-
-      // fixMissingDateRange(data, !time ? "1y" : time, startFrom, dayjs(), defaultValue);
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
