@@ -451,7 +451,7 @@ export default class ActivitiesController {
       };
 
       //Transfers
-      const transfers = await db
+      const activities = await db
         .collection("sales")
         .aggregate([
           {
@@ -460,65 +460,15 @@ export default class ActivitiesController {
             },
           },
           {
-            $project: {
-              value: {
-                $toDouble: "$price",
-              },
-              block_timestamp: {
-                $toDate: "$timestamp",
-              },
-              transaction_hash: "$txHash",
-              slug: "$collection",
-              from_address: "$fromAddress",
-              to_address: "$toAddress",
-              token_id: "$assetNameHex",
-              eth_price: { $toDouble: "$price" },
-            },
-          },
-          {
-            $lookup: {
-              from: "assets",
-              let: {
-                token_id: "$token_id",
-                slug: slugName,
-              },
+            $unionWith: {
+              coll: "listings",
               pipeline: [
                 {
                   $match: {
-                    $expr: {
-                      $and: [
-                        {
-                          $eq: ["$collection.name", "$$slug"],
-                        },
-                        {
-                          $eq: ["$assetNameHex", "$$token_id"],
-                        },
-                      ],
-                    },
+                    action: "list",
                   },
                 },
               ],
-              as: "result",
-            },
-          },
-          {
-            $unwind: {
-              path: "$result",
-            },
-          },
-          {
-            $project: {
-              slug: 1,
-              token_id: 1,
-              transaction_hash: 1,
-              from_address: 1,
-              to_address: 1,
-              value: 1,
-              block_timestamp: 1,
-              event_type: 1,
-              eth_price: 1,
-              token_name: "$result.name",
-              token_img_url: "$result.image_url",
             },
           },
           {
@@ -533,15 +483,37 @@ export default class ActivitiesController {
         ])
         .toArray();
 
-      //Get count of Transfers
+      // Get count of activities
       let totalCount = await db
         .collection("sales")
-        .countDocuments({ collection: slugName });
+        .aggregate([
+          {
+            $match: {
+              collection: slugName,
+            },
+          },
+          {
+            $unionWith: {
+              coll: "listings",
+              pipeline: [
+                {
+                  $match: {
+                    action: "list",
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $count: "count",
+          },
+        ])
+        .toArray();
 
       let paginatedData = {
         pageSize: pageSize,
         currentPage: page,
-        totalPages: Math.ceil(totalCount / pageSize),
+        totalPages: Math.ceil(totalCount[0].count / pageSize),
       };
 
       // setCache(
@@ -559,7 +531,7 @@ export default class ActivitiesController {
       res.status(200).send({
         success: true,
         data: {
-          activity: transfers,
+          activity: activities,
           paginatedData,
         },
       });
