@@ -87,17 +87,17 @@ export default class WhalesController {
     }
     try {
       let whalesData = await db
-        .collection("transfers")
+        .collection("sales")
         .aggregate([
           {
             $project: {
               value: {
-                $toDouble: "$value",
+                $toDouble: "$price",
               },
-              block_timestamp: 1,
-              slug: 1,
-              token_id: 1,
-              to_address: 1,
+              block_timestamp: "$timestamp",
+              slug: "$collection",
+              token_id: "$assetNameHex",
+              to_address: "$toAddress",
             },
           },
           {
@@ -111,9 +111,7 @@ export default class WhalesController {
             $group: {
               _id: "$to_address",
               value: {
-                $sum: {
-                  $divide: ["$value", 1000000000000000000],
-                },
+                $sum: "$value",
               },
               collectionsList: {
                 $addToSet: "$slug",
@@ -158,13 +156,13 @@ export default class WhalesController {
           },
           {
             $lookup: {
-              from: "collections",
+              from: "policies",
               localField: "topHolding",
-              foreignField: "slug",
+              foreignField: "name",
               pipeline: [
                 {
                   $project: {
-                    image_url: 1,
+                    featuredImages: 1,
                   },
                 },
               ],
@@ -179,7 +177,7 @@ export default class WhalesController {
           {
             $project: {
               topHolding: 1,
-              topHoldingUrl: "$output.image_url",
+              topHoldingUrl: "$output.featuredImages",
               value: 1,
               collections: 1,
               tokens: 1,
@@ -190,16 +188,16 @@ export default class WhalesController {
 
           {
             $lookup: {
-              from: "transfers",
+              from: "sales",
               localField: "_id",
-              foreignField: "from_address",
+              foreignField: "fromAddress",
               pipeline: [
                 {
                   $project: {
                     value: {
-                      $toDouble: "$value",
+                      $toDouble: "$price",
                     },
-                    from_address: 1,
+                    from_address: "$fromAddress",
                   },
                 },
               ],
@@ -215,9 +213,7 @@ export default class WhalesController {
             $group: {
               _id: "$output.from_address",
               sellVolume: {
-                $sum: {
-                  $divide: ["$output.value", 1000000000000000000],
-                },
+                $sum: "$output.value",
               },
               value: {
                 $max: "$value",
@@ -279,17 +275,17 @@ export default class WhalesController {
         ),
       };
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: {
-            paginatedData,
-            list: whalesData[0].sellerData,
-          },
-        }),
-        15 * 1440
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: {
+      //       paginatedData,
+      //       list: whalesData[0].sellerData,
+      //     },
+      //   }),
+      //   15 * 1440
+      // );
 
       res.status(200).send({
         success: true,

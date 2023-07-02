@@ -1077,17 +1077,14 @@ export default class OwnershipController {
   };
 
   public GetTraders = async (req: Request, res: Response) => {
-    let { slug } = req.params;
+    let { name } = req.params;
     let { time } = req.query;
 
     let subtractedTime: dayjs.Dayjs;
     if (time)
-      subtractedTime = await getSubtractedtime(
-        time,
-        ["transfers"],
-        ["block_timestamp"],
-        { slug: slug }
-      );
+      subtractedTime = await getSubtractedtime(time, ["sales"], ["timestamp"], {
+        collection: name,
+      });
 
     let groupFormat: any = {
       year: {
@@ -1131,24 +1128,22 @@ export default class OwnershipController {
 
     try {
       let buyersAndSellers = await db
-        .collection("transfers")
+        .collection("sales")
         .aggregate([
           {
             $match: {
-              slug,
+              collection: name,
             },
           },
           {
             $project: {
               time: {
-                $toDate: "$block_timestamp",
+                $toDate: "$timestamp",
               },
-              token_id: {
-                $concat: ["$slug", "_", "$token_id"],
-              },
-              seller: "$from_address",
-              buyer: "$to_address",
-              value: 1,
+              token_id: "$assetNameHex",
+              seller: "$fromAddress",
+              buyer: "$toAddress",
+              value: "$price",
             },
           },
           {
@@ -1162,7 +1157,7 @@ export default class OwnershipController {
                        !time
                          ? ""
                          : `&& time >= new Date('${
-                             structure(time, slug).matchFormat.created_date.$gte
+                             structure(time, name).matchFormat.timestamp.$gte
                            }')`
                      }) { \n\
                         state.sellers.push(seller);\n\ 
@@ -1184,8 +1179,7 @@ export default class OwnershipController {
                           !time
                             ? ""
                             : `&& time >= new Date('${
-                                structure(time, slug).matchFormat.created_date
-                                  .$gte
+                                structure(time, name).matchFormat.timestamp.$gte
                               }')`
                         }) { \n\
                           state.buyers.push(buyer); \n\
@@ -1207,7 +1201,7 @@ export default class OwnershipController {
                        !time
                          ? ""
                          : `&& time >= new Date('${
-                             structure(time, slug).matchFormat.created_date.$gte
+                             structure(time, name).matchFormat.timestamp.$gte
                            }')`
                      }) {\n\
                         if(!state.traders.includes(seller)) \n\
@@ -1327,27 +1321,21 @@ export default class OwnershipController {
         prevHolders = day.holders;
       });
 
-      // const value = {
-      //   buyers: 0,
-      //   sellers: 0,
-      //   holders: prevHolders,
-      // }
-      // fixMissingDateRange(data, !time ? "1y" : time, startFrom, dayjs(), value);
-
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        2 * 1440
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   2 * 1440
+      // );
 
       res.status(200).send({
         success: true,
         data: data,
       });
     } catch (error) {
+      console.log(error);
       res.status(500).send(error);
     }
   };
@@ -1760,7 +1748,7 @@ export default class OwnershipController {
 
   public GetWalletsWithOneNFT = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       let pageSize = 20;
       let pageString = req.query.page;
       let page = Number(pageString) || 1;
@@ -1768,19 +1756,21 @@ export default class OwnershipController {
       const pipeline = [
         {
           $match: {
-            slug,
+            collection: name,
           },
         },
         {
           $group: {
-            _id: "$token_id",
+            _id: "$assetNameHex",
             res: {
               $addToSet: {
-                to_address: "$winner_account.address",
-                token_id: "$token_id",
-                slug: "$slug",
-                block_timestamp: "$created_date",
-                value: "$rarible_price.usd_price",
+                to_address: "$toAddress",
+                token_id: "$assetNameHex",
+                slug: "$collection",
+                block_timestamp: "$timestamp",
+                value: "$price",
+                image: "$image",
+                name: "$displayName",
               },
             },
           },
@@ -1832,37 +1822,8 @@ export default class OwnershipController {
             token_id: "$events.token_id",
             block_timestamp: "$events.block_timestamp",
             value: "$events.value",
-          },
-        },
-        {
-          $lookup: {
-            from: "tokens",
-            localField: "token_id",
-            foreignField: "token_id",
-            as: "result",
-            pipeline: [
-              {
-                $match: {
-                  slug,
-                },
-              },
-            ],
-          },
-        },
-        {
-          $unwind: {
-            path: "$result",
-          },
-        },
-        {
-          $project: {
-            wallet: 1,
-            token_id: 1,
-            slug: 1,
-            last_transaction: "$block_timestamp",
-            value: 1,
-            token_name: "$result.name",
-            token_image_url: "$result.image_url",
+            image: "$events.image",
+            name: "$events.name",
           },
         },
         {
@@ -1892,10 +1853,7 @@ export default class OwnershipController {
         },
       ];
 
-      const result = await db
-        .collection("rarible_events")
-        .aggregate(pipeline)
-        .toArray();
+      const result = await db.collection("sales").aggregate(pipeline).toArray();
 
       let paginatedData = {
         pageSize: pageSize,
@@ -1903,15 +1861,15 @@ export default class OwnershipController {
         totalPages: Math.ceil(result[0].totalCount[0]?.count || 0 / pageSize),
       };
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          paginatedData,
-          list: result[0].data,
-        }),
-        15 * 1440
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     paginatedData,
+      //     list: result[0].data,
+      //   }),
+      //   15 * 1440
+      // );
 
       res.status(200).send({
         success: true,
@@ -2252,7 +2210,7 @@ export default class OwnershipController {
   public GetTopProfitWallets = async (req: Request, res: Response) => {
     try {
       // TODO: Add the pipeline
-      let { slug } = req.params;
+      let { name } = req.params;
       let pageSize = 20;
       let pageString = req.query.page;
       let page = Number(pageString) || 1;
@@ -2263,24 +2221,16 @@ export default class OwnershipController {
       let pipeline = [
         {
           $match: {
-            slug: slug,
-            event_type: "successful",
+            collection: name,
           },
         },
         {
           $project: {
-            slug: 1,
-            token_id: 1,
-            from_address: "$seller.address",
-            to_address: "$winner_account.address",
-            price: {
-              $divide: [
-                {
-                  $toDouble: "$total_price",
-                },
-                1000000000000000000,
-              ],
-            },
+            slug: "$collection",
+            token_id: "$assetNameHex",
+            from_address: "$fromAddress",
+            to_address: "$toAddress",
+            price: 1,
           },
         },
         {
@@ -2370,21 +2320,20 @@ export default class OwnershipController {
         },
       ];
 
-      const result = await db
-        .collection("rarible_events")
-        .aggregate(pipeline)
-        .toArray();
+      console.log(JSON.stringify(pipeline));
+
+      const result = await db.collection("sales").aggregate(pipeline).toArray();
 
       let data = result[0];
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        12 * 1440
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   12 * 1440
+      // );
 
       res.status(200).send({
         success: true,

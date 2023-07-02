@@ -5,30 +5,30 @@ import Controller from "./ownership.controller";
 const ownership: Router = Router();
 const controller = new Controller();
 
-ownership.get("/traders/:slug", controller.GetTraders);
-ownership.get("/diamond-hands/:slug", controller.GetDiamondHands);
+ownership.get("/traders/:name", controller.GetTraders);
+ownership.get("/diamond-hands/:name", controller.GetDiamondHands);
 ownership.get(
-  "/diamond-hands-owned/:slug",
+  "/diamond-hands-owned/:name",
   controller.GetNFTsOwnedByDiamondHands
 );
-ownership.get("/holding-period/:slug", controller.GetNFTsHoldingPeriod);
-ownership.get("/top-balances/:slug", controller.GetTopBalances);
+ownership.get("/holding-period/:name", controller.GetNFTsHoldingPeriod);
+ownership.get("/top-balances/:name", controller.GetTopBalances);
 ownership.get(
-  "/other-collections-owned/:slug",
+  "/other-collections-owned/:name",
   controller.GetOtherCollectionsOwnedByOwners
 );
 ownership
-  .route("/top-owners-transactions/:slug")
+  .route("/top-owners-transactions/:name")
   .get(controller.GetTransactionsOfTopOwners);
 ownership
-  .route("/wallets-with-one-nft/:slug")
+  .route("/wallets-with-one-nft/:name")
   .get(controller.GetWalletsWithOneNFT);
 ownership
-  .route("/buys-from-top-5/:slug")
+  .route("/buys-from-top-5/:name")
   .get(controller.GetBuysFromTop5Wallets);
-ownership.get("/profit-made/:slug", controller.GetTopProfitWallets);
+ownership.get("/profit-made/:name", controller.GetTopProfitWallets);
 ownership.get(
-  "/other-collections-owned-frequency/:slug",
+  "/other-collections-owned-frequency/:name",
   controller.GetCollectionsOwnedByFrequency
 );
 

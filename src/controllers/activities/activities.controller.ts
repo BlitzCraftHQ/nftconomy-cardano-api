@@ -422,7 +422,7 @@ export default class ActivitiesController {
   public GetActivities = async (req: Request, res: Response) => {
     try {
       // Getting slug Name
-      let slugName = req.params.slug;
+      let slugName = req.params.name;
 
       // Pagination declaration
       let pageSize = 10;
@@ -438,57 +438,46 @@ export default class ActivitiesController {
       let sortOptions = (sortType) => {
         switch (sortType) {
           case "lowest-price":
-            return { value: 1 };
+            return { price: 1 };
           case "highest-price":
-            return { value: -1 };
+            return { price: -1 };
           case "newest":
-            return { block_timestamp: -1 };
+            return { timestamp: -1 };
           case "oldest":
-            return { block_timestamp: 1 };
+            return { timestamp: 1 };
           default:
-            return { block_timestamp: -1 };
+            return { timestamp: -1 };
         }
       };
 
       //Transfers
       const transfers = await db
-        .collection("transfers")
+        .collection("sales")
         .aggregate([
           {
             $match: {
-              slug: slugName,
+              collection: slugName,
             },
           },
           {
             $project: {
               value: {
-                $toDouble: "$value",
+                $toDouble: "$price",
               },
               block_timestamp: {
-                $toDate: "$block_timestamp",
+                $toDate: "$timestamp",
               },
-              transaction_hash: 1,
-              slug: 1,
-              from_address: 1,
-              to_address: 1,
-              token_id: 1,
-              event_type: {
-                $cond: {
-                  if: {
-                    $eq: ["$value", 0],
-                  },
-                  then: "transfers",
-                  else: "sale",
-                },
-              },
-              eth_price: {
-                $divide: [{ $toDouble: "$value" }, 1000000000000000000],
-              },
+              transaction_hash: "$txHash",
+              slug: "$collection",
+              from_address: "$fromAddress",
+              to_address: "$toAddress",
+              token_id: "$assetNameHex",
+              eth_price: { $toDouble: "$price" },
             },
           },
           {
             $lookup: {
-              from: "tokens",
+              from: "assets",
               let: {
                 token_id: "$token_id",
                 slug: slugName,
@@ -499,10 +488,10 @@ export default class ActivitiesController {
                     $expr: {
                       $and: [
                         {
-                          $eq: ["$slug", "$$slug"],
+                          $eq: ["$collection.name", "$$slug"],
                         },
                         {
-                          $eq: ["$token_id", "$$token_id"],
+                          $eq: ["$assetNameHex", "$$token_id"],
                         },
                       ],
                     },
@@ -546,8 +535,8 @@ export default class ActivitiesController {
 
       //Get count of Transfers
       let totalCount = await db
-        .collection("transfers")
-        .countDocuments({ slug: slugName });
+        .collection("sales")
+        .countDocuments({ collection: slugName });
 
       let paginatedData = {
         pageSize: pageSize,
@@ -555,17 +544,17 @@ export default class ActivitiesController {
         totalPages: Math.ceil(totalCount / pageSize),
       };
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: {
-            activity: transfers,
-            paginatedData,
-          },
-        }),
-        1440
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: {
+      //       activity: transfers,
+      //       paginatedData,
+      //     },
+      //   }),
+      //   1440
+      // );
 
       res.status(200).send({
         success: true,
