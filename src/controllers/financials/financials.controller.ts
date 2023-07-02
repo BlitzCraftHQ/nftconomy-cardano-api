@@ -117,12 +117,9 @@ export default class FinancialsController {
 
     let subtractedTime;
     if (time)
-      subtractedTime = await getSubtractedtime(
-        time,
-        ["rarible_events"],
-        ["created_date"],
-        { name: name }
-      );
+      subtractedTime = await getSubtractedtime(time, ["sales"], ["timestamp"], {
+        collection: name,
+      });
 
     try {
       let pipeline = [
@@ -131,7 +128,7 @@ export default class FinancialsController {
             ...structure(time, name).matchFormat,
             ...(time
               ? {
-                  created_date: {
+                  timestamp: {
                     $gte: subtractedTime.toISOString(),
                   },
                 }
@@ -140,10 +137,10 @@ export default class FinancialsController {
         },
         {
           $project: {
-            created_date: {
-              $toDate: "$created_date",
+            timestamp: {
+              $toDate: "$timestamp",
             },
-            total_price: 1,
+            price: 1,
             name: 1,
           },
         },
@@ -152,41 +149,17 @@ export default class FinancialsController {
             _id: structure(time, name).idFormat,
             average_total_price: {
               $avg: {
-                $divide: [
-                  {
-                    $convert: {
-                      input: "$total_price",
-                      to: "double",
-                    },
-                  },
-                  1000000000000000000,
-                ],
+                $toDouble: "$price",
               },
             },
             min_total_price: {
               $min: {
-                $divide: [
-                  {
-                    $convert: {
-                      input: "$total_price",
-                      to: "double",
-                    },
-                  },
-                  1000000000000000000,
-                ],
+                $toDouble: "$price",
               },
             },
             max_total_price: {
               $max: {
-                $divide: [
-                  {
-                    $convert: {
-                      input: "$total_price",
-                      to: "double",
-                    },
-                  },
-                  1000000000000000000,
-                ],
+                $toDouble: "$price",
               },
             },
           },
@@ -207,7 +180,7 @@ export default class FinancialsController {
       ];
 
       let priceData = await db
-        .collection("rarible_events")
+        .collection("sales")
         .aggregate(pipeline)
         .toArray();
 
@@ -239,14 +212,14 @@ export default class FinancialsController {
         startFrom = date;
       });
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({
         success: true,
