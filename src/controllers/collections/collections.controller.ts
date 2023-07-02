@@ -944,76 +944,40 @@ export default class CollectionController {
     }
   };
 
-  public GetCollectionCIDbySlug = async (req: Request, res: Response) => {
-    try {
-      let slug = req.params.slug;
-
-      // Read collections from file
-      let collections = JSON.parse(
-        fs.readFileSync("src/data/hot.json", "utf8")
-      ).data;
-
-      // Get the collection by slug
-      let collection = collections.find(
-        (collection) => collection.openseaSlug === slug
-      );
-
-      if (!collection) {
-        return res.status(404).json({
-          success: false,
-          message: "Collection not found",
-        });
-      } else {
-        setCache(
-          uniqueKey(req),
-          JSON.stringify({
-            success: true,
-            data: collection,
-          })
-        );
-        res.status(200).json({ success: true, data: collection });
-      }
-    } catch (e) {
-      console.log(e);
-      res.status(500).send(e);
-    }
-  };
-
   public GetNumberofNftsListed = async (req: Request, res: Response) => {
     try {
-      const { slug } = req.params;
+      const { name } = req.params;
       const { time } = req.query;
 
       let subtractedTime;
       if (time)
         subtractedTime = await getSubtractedtime(
           time,
-          ["rarible_events"],
-          ["created_date"],
-          { slug: slug }
+          ["listings"],
+          ["timestamp"],
+          { collection: name }
         );
 
       const pipeline = [
         {
           $match: {
-            event_type: "created",
-            slug: slug,
-            created_date: {
+            collection: name,
+            timestamp: {
               $gte: new Date(subtractedTime).toISOString(),
             },
           },
         },
         {
           $project: {
-            created_date: {
-              $toDate: "$created_date",
+            timestamp: {
+              $toDate: "$timestamp",
             },
-            slug: 1,
+            name: 1,
           },
         },
         {
           $group: {
-            _id: structure(time, slug).idFormat,
+            _id: structure(time, name).idFormat,
             nfts: {
               $sum: 1,
             },
@@ -1033,7 +997,7 @@ export default class CollectionController {
       ];
 
       let nftsListed = await db
-        .collection("rarible_events")
+        .collection("listings")
         .aggregate(pipeline)
         .toArray();
 
@@ -1057,14 +1021,14 @@ export default class CollectionController {
         startFrom = date;
       });
 
-      setCache(
-        uniqueKey(req),
-        JSON.stringify({
-          success: true,
-          data: data,
-        }),
-        720
-      );
+      // setCache(
+      //   uniqueKey(req),
+      //   JSON.stringify({
+      //     success: true,
+      //     data: data,
+      //   }),
+      //   720
+      // );
 
       res.status(200).send({ success: true, data: data });
     } catch (error) {

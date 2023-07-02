@@ -784,6 +784,14 @@ export default class FinancialsController {
   public GetTopSales = async (req: Request, res: Response) => {
     let { name } = req.params;
     let { time } = req.query;
+    let pageSize = 12;
+    // console.log(req.query);
+    let pageString = req.query.page;
+    let page = Number(pageString) || 1;
+
+    if (!page || page <= 0) {
+      page = 1;
+    }
 
     let subtractedTime;
     if (time)
@@ -795,7 +803,7 @@ export default class FinancialsController {
       let pipeline = [
         {
           $match: {
-            ...structure(time, name).matchFormat,
+            collection: name,
             ...(time
               ? {
                   timestamp: {
@@ -806,61 +814,35 @@ export default class FinancialsController {
           },
         },
         {
-          $project: {
-            timestamp: {
-              $toDate: "$timestamp",
-            },
-            price: 1,
-            name: 1,
-          },
-        },
-        {
-          $group: {
-            _id: structure(time, name).idFormat,
-            volume: {
-              $sum: {
-                $toDouble: "$price",
-              },
-            },
-          },
-        },
-        {
-          $project: {
-            _id: getDateFormat(time),
-            volume: 1,
-          },
-        },
-        {
           $sort: {
-            _id: 1,
+            price: 1,
+          },
+        },
+        {
+          $facet: {
+            data: [
+              {
+                $skip: (page - 1) * pageSize,
+              },
+              {
+                $limit: pageSize,
+              },
+            ],
+            totalCount: [
+              {
+                $count: "count",
+              },
+            ],
           },
         },
       ];
 
-      let volumeData = await db
+      console.log(JSON.stringify(pipeline));
+
+      let topSalesData = await db
         .collection("sales")
         .aggregate(pipeline)
         .toArray();
-
-      let data = [];
-
-      var startFrom = !time
-        ? volumeData.length
-          ? dayjs(volumeData[0]._id)
-          : dayjs()
-        : subtractedTime;
-
-      const value = {
-        volume: 0,
-      };
-
-      // Convert id objects to datetime
-      volumeData.forEach((item, index) => {
-        const date = dayjs(item._id);
-        fixMissingDateRange(data, !time ? "1y" : time, startFrom, date, value);
-        data.push(item);
-        startFrom = date;
-      });
 
       // setCache(
       //   uniqueKey(req),
@@ -873,7 +855,14 @@ export default class FinancialsController {
 
       res.status(200).send({
         success: true,
-        data: data,
+        data: {
+          paginatedData: {
+            pageSize: pageSize,
+            currentPage: page,
+            totalPages: topSalesData[0].totalCount[0].count / pageSize,
+          },
+          data: topSalesData[0].data,
+        },
       });
     } catch (error) {
       console.log(error);
