@@ -134,10 +134,14 @@ export default class TokenController {
 
       res.status(200).send({
         success: true,
-        pageSize: pageSize,
-        currentPage: page,
-        totalCount: data[0].totalCount[0].count,
-        data: data[0].data,
+        data: {
+          paginatedData: {
+            pageSize: pageSize,
+            currentPage: page,
+            totalPages: data[0].totalCount[0].count / pageSize,
+          },
+          data: data[0].data,
+        },
       });
     } catch (error) {
       console.log(error.toString());
