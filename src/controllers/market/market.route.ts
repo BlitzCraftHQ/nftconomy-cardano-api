@@ -22,7 +22,6 @@ market.get("/collection-distribution", controller.GetCollectionDistribution);
 
 market.get("/top-sales", controller.GetTopSales);
 market.get("/traders-count", controller.GetTradersCount);
-market.get("/blue-chip-index", controller.GetBlueChipIndex);
 
 market.get("/platform-sales-volume", controller.GetPlatformVolumeAndSales);
 market.get("/currency-sales-volume", controller.GetCurrencyVolumeAndSales);

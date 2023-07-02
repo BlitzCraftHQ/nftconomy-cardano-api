@@ -4,13 +4,13 @@ export const structure = (time: any = null): any => {
 
   let idFormat: any = {
     year: {
-      $year: "$created_date",
+      $year: "$timestamp",
     },
     month: {
-      $month: "$created_date",
+      $month: "$timestamp",
     },
     day: {
-      $dayOfMonth: "$created_date",
+      $dayOfMonth: "$timestamp",
     },
   };
 
@@ -19,16 +19,16 @@ export const structure = (time: any = null): any => {
 
     idFormat = {
       year: {
-        $year: "$created_date",
+        $year: "$timestamp",
       },
       month: {
-        $month: "$created_date",
+        $month: "$timestamp",
       },
       day: {
-        $dayOfMonth: "$created_date",
+        $dayOfMonth: "$timestamp",
       },
       hour: {
-        $hour: "$created_date",
+        $hour: "$timestamp",
       },
     };
   }
@@ -37,19 +37,19 @@ export const structure = (time: any = null): any => {
     subtractedTime = today.setDate(today.getDate() - 7);
     idFormat = {
       year: {
-        $year: "$created_date",
+        $year: "$timestamp",
       },
       month: {
-        $month: "$created_date",
+        $month: "$timestamp",
       },
       day: {
-        $dayOfMonth: "$created_date",
+        $dayOfMonth: "$timestamp",
       },
       hour: {
         $multiply: [
           {
             $floor: {
-              $divide: [{ $hour: "$created_date" }, 2],
+              $divide: [{ $hour: "$timestamp" }, 2],
             },
           },
           2,
@@ -70,21 +70,12 @@ export const structure = (time: any = null): any => {
     subtractedTime = today.setFullYear(today.getFullYear() - 1);
   }
 
-  let matchFormat: any = {
-    event_type: "successful",
-    total_price: {
-      $nin: [null, "0", 0],
-    },
-  };
+  let matchFormat: any = {};
 
   if (time) {
     matchFormat = {
-      event_type: "successful",
-      created_date: {
+      timestamp: {
         $gte: new Date(subtractedTime).toISOString(),
-      },
-      total_price: {
-        $nin: [null, "0", 0],
       },
     };
   }
